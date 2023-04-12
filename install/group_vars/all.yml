@@ -85,6 +85,7 @@ es_listen_external: false
 # default is no (set to blank) or false
 # set the below variable to 'true' to activate
 install_curator_tool: false
+curator_download_url: https://github.com/elastic/curator/archive/v8.0.3.tar.gz
 ## X-PACK
 # This installs an additional suite of tools from elastic
 # https://www.elastic.co/guide/en/x-pack/current/xpack-introduction.html
