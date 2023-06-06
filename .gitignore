@@ -4,3 +4,5 @@ meta/main.yml
 *.retry
 # exclude travis ci config files
 .travis.yml
+hosts-local
+install/buffer/elastic-certificates.p12

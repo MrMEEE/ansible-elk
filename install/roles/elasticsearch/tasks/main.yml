@@ -31,16 +31,6 @@
     name: [elasticsearch, java-17-openjdk-headless]
   become: true
 
-- name: Copy templated elasticsearch.yml
-  template:
-    src=elasticsearch.yml.j2
-    dest=/etc/elasticsearch/elasticsearch.yml
-    owner=root
-    group=elasticsearch
-    mode=0660
-  become: true
-  ignore_errors: true
-
 - name: Check if system memory is greater than 64G
   debug: msg="System memory is {{ansible_memory_mb.real.total | int}} so setting heapsize to 32G upper limit"
   when: ansible_memory_mb.real.total|int >= 65536
@@ -120,8 +110,58 @@
     group: elasticsearch
     mode: 0755
 
-- name: Generate certificates
+- block:
+  - name: Remove old certificate package
+    file:
+      path: /etc/elasticsearch/certs/elastic-certificates.p12
+      state: absent
+
+  - name: Generate certificates
+    shell: |
+      /usr/share/elasticsearch/bin/elasticsearch-certutil cert --self-signed --out /etc/elasticsearch/certs/elastic-certificates.p12 --days 3650 --pass {{ certificate_password }}
+    args:
+      creates: /etc/elasticsearch/certs/elastic-certificates.p12
+    become: true
+
+  - name: Fetch certificates from master
+    fetch: 
+      src: /etc/elasticsearch/certs/elastic-certificates.p12
+      dest: buffer/ 
+      flat: yes
   
+  when: es_cluster_master|default(false)|bool == true
+
+- name: Copy the certificates from master to the other hosts
+  copy: 
+    src: buffer/elastic-certificates.p12
+    dest: /etc/elasticsearch/certs/elastic-certificates.p12
+  when: es_cluster_master|default(false)|bool == false
+
+- name: Set rights for /etc/elasticsearch/certs/elastic-certificates.p12
+  ansible.builtin.file:
+    path: /etc/elasticsearch/certs/elastic-certificates.p12
+    owner: root
+    group: elasticsearch
+    mode: 0660
+  become: true
+
+- name: Set certificate password
+  shell: |
+    echo "{{ certificate_password }}" | /usr/share/elasticsearch/bin/elasticsearch-keystore add -f --stdin xpack.security.transport.ssl.keystore.secure_password
+    echo "{{ certificate_password }}" | /usr/share/elasticsearch/bin/elasticsearch-keystore add -f --stdin xpack.security.http.ssl.keystore.secure_password
+  #no_log: true
+  #diff: no
+  become: true
+
+- name: Copy templated elasticsearch.yml
+  template:
+    src=elasticsearch.yml.j2
+    dest=/etc/elasticsearch/elasticsearch.yml
+    owner=root
+    group=elasticsearch
+    mode=0660
+  become: true
+  ignore_errors: true
 
 - name: Start or restart elasticsearch service
   command: systemctl restart elasticsearch.service
