@@ -2,6 +2,11 @@
 #
 # install curator tool for managing elasticsearch
 #
+- name: Install pip
+  yum:
+    name: python3-pip
+  become: true
+
 - name: Install Curator from url
   ansible.builtin.pip:
     name: "{{ curator_download_url }}"

@@ -3,10 +3,19 @@
 # Install/run elasticsearch
 #
 
-- name: Install libsemanage-python and dependencies
+- name: Install libsemanage and dependencies
   yum:
-    name: libsemanage-python
+    name: python3-libsemanage
   become: true
+
+- name: Enable Legacy Crypto policies, because elasticsearch haven't updated their key
+  ansible.builtin.shell: update-crypto-policies --set DEFAULT:SHA1
+
+- name: Install elasticsearch public key
+  ansible.builtin.rpm_key:
+    state: present
+    key: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+    validate_certs: false
 
 - name: Copy elasticsearch yum repo file
   copy:
@@ -19,7 +28,7 @@
 
 - name: Install elasticsearch and openjdk
   yum:
-    name: [elasticsearch, java-1.8.0-openjdk-headless]
+    name: [elasticsearch, java-17-openjdk-headless]
   become: true
 
 - name: Copy templated elasticsearch.yml
@@ -80,20 +89,20 @@
   raw: setcap 'cap_net_bind_service=+ep' /usr/lib/jvm/jre/bin/java
   become: true
 
-# https://www.centos.org/forums/viewtopic.php?t=16398
-- name: Obtain exact version of JRE for libjli.so workaround
-  shell: "ls /usr/lib/jvm/ | grep java | grep openjdk-1"
-  register: libjli_location
-  become: true
+## https://www.centos.org/forums/viewtopic.php?t=16398
+#- name: Obtain exact version of JRE for libjli.so workaround
+#  shell: "ls /usr/lib/jvm/ | grep java | grep openjdk-1"
+#  register: libjli_location
+#  become: true
 
-- name: Apply EL symlink workaround for libjli.so
-  file:
-    src='/usr/lib/jvm/{{libjli_location.stdout}}/jre/lib/amd64/jli/libjli.so'
-    dest='/lib64/libjli.so'
-    state=link
-  become: true
+#- name: Apply EL symlink workaround for libjli.so
+#  file:
+#    src='/usr/lib/jvm/{{libjli_location.stdout}}/jre/lib/amd64/jli/libjli.so'
+#    dest='/lib64/libjli.so'
+#    state=link
+#  become: true
 
-# this seems like a packaging bug for 6.x
+# this seems like a packaging bug for 8.x
 - name: Create log directory structure for ES
   file:
     path: /usr/share/elasticsearch/logs
@@ -110,6 +119,9 @@
     owner: elasticsearch
     group: elasticsearch
     mode: 0755
+
+- name: Generate certificates
+  
 
 - name: Start or restart elasticsearch service
   command: systemctl restart elasticsearch.service

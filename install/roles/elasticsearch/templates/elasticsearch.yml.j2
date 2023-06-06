@@ -14,13 +14,24 @@
 #
 # Use a descriptive name for your cluster:
 #
+{% if es_cluster_enabled %}
+cluster.name: {{ es_cluster_name }}
+{% endif %}
+{% if not es_cluster_enabled %}
 #cluster.name: my-application
+{% endif %}
 #
 # ------------------------------------ Node ------------------------------------
 #
 # Use a descriptive name for the node:
 #
+{% if es_cluster_enabled %}
+node.name: {{ ansible_hostname }}
+{% endif %}
+{% if not es_cluster_enabled %}
 #node.name: node-1
+{% endif %}
+
 #
 # Add custom attributes to the node:
 #
@@ -82,7 +93,12 @@ network.host: 0.0.0.0
 #
 # Block initial recovery after a full cluster restart until N nodes are started:
 #
-#gateway.recover_after_nodes: 3
+{% if es_cluster_enabled %}
+gateway.recover_after_data_nodes: {{ es_min_quorum }}
+{% endif %}
+{% if not es_cluster_enabled %}
+#gateway.recover_after_data_nodes: 3
+{% endif %}
 #
 # For more information, consult the gateway module documentation.
 #
