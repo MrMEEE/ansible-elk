@@ -82,7 +82,7 @@ es_listen_external: false
 #To enable elasticsearch cluster mode (more than one node)
 es_cluster_enabled: true
 #Name of the cluster
-es_cluster_name: my_cluster
+es_cluster_name: prod_cluster
 #The minimum number of nodes available to select a master
 es_min_quorum: 2
 ### install curator tool ###

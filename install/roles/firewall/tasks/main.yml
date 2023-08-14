@@ -33,7 +33,7 @@
   become: true
 
 - name: Determine if TCP/{{es_local_port}} is already active
-  shell: firewall-cmd --list-ports | egrep -q "^{{es_local_port}}/tcp"
+  shell: firewall-cmd --list-ports | egrep -q "^{{s}}/tcp"
   ignore_errors: true
   register: firewalld_es_local_port_exists
   no_log: true

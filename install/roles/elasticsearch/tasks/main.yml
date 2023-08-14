@@ -110,49 +110,22 @@
     group: elasticsearch
     mode: 0755
 
-- block:
-  - name: Remove old certificate package
-    file:
-      path: /etc/elasticsearch/certs/elastic-certificates.p12
-      state: absent
-
-  - name: Generate certificates
-    shell: |
-      /usr/share/elasticsearch/bin/elasticsearch-certutil cert --self-signed --out /etc/elasticsearch/certs/elastic-certificates.p12 --days 3650 --pass {{ certificate_password }}
-    args:
-      creates: /etc/elasticsearch/certs/elastic-certificates.p12
-    become: true
-
-  - name: Fetch certificates from master
-    fetch: 
-      src: /etc/elasticsearch/certs/elastic-certificates.p12
-      dest: buffer/ 
-      flat: yes
-  
-  when: es_cluster_master|default(false)|bool == true
-
-- name: Copy the certificates from master to the other hosts
-  copy: 
-    src: buffer/elastic-certificates.p12
-    dest: /etc/elasticsearch/certs/elastic-certificates.p12
-  when: es_cluster_master|default(false)|bool == false
-
-- name: Set rights for /etc/elasticsearch/certs/elastic-certificates.p12
-  ansible.builtin.file:
+- name: Remove old certificate package
+  file:
     path: /etc/elasticsearch/certs/elastic-certificates.p12
-    owner: root
-    group: elasticsearch
-    mode: 0660
-  become: true
+    state: absent
 
-- name: Set certificate password
-  shell: |
-    echo "{{ certificate_password }}" | /usr/share/elasticsearch/bin/elasticsearch-keystore add -f --stdin xpack.security.transport.ssl.keystore.secure_password
-    echo "{{ certificate_password }}" | /usr/share/elasticsearch/bin/elasticsearch-keystore add -f --stdin xpack.security.http.ssl.keystore.secure_password
-  #no_log: true
-  #diff: no
-  become: true
+- name: Remove old CA package
+  file:
+    path: /etc/elasticsearch/certs/elastic-stack-ca.p12
+    state: absent
 
+- name: Find nodes to bootstrap cluster
+  ansible.builtin.set_fact:
+    bootstrap_nodes: "{{ (bootstrap_nodes|default('')+'  - '+item+'\n') }}"
+  with_inventory_hostnames:
+    - all
+    
 - name: Copy templated elasticsearch.yml
   template:
     src=elasticsearch.yml.j2
@@ -163,6 +136,55 @@
   become: true
   ignore_errors: true
 
+- block:
+  - name: Generate CA
+    shell: |
+      /usr/share/elasticsearch/bin/elasticsearch-certutil ca --out /etc/elasticsearch/certs/elastic-stack-ca.p12 --days 3650 --pass {{ certificate_password }}
+    args:
+      creates: /etc/elasticsearch/certs/elastic-stack-ca.p12
+    become: true
+
+  - name: Fetch CA certificates from master
+    fetch: 
+      src: /etc/elasticsearch/certs/elastic-stack-ca.p12
+      dest: buffer/ 
+      flat: yes
+  when: es_cluster_master|default(false)|bool == true
+
+- block:
+  - name: Copy the certificates from master to the other hosts
+    copy: 
+      src: buffer/elastic-stack-ca.p12
+      dest: /etc/elasticsearch/certs/elastic-stack-ca.p12
+      owner: root
+      group: elasticsearch
+      mode: 0660
+    become: true
+
+  - name: Generate certificates
+    shell: |
+      /usr/share/elasticsearch/bin/elasticsearch-certutil cert --out /etc/elasticsearch/certs/elastic-certificates.p12 --ca /etc/elasticsearch/certs/elastic-stack-ca.p12 --days 3650 --pass {{ certificate_password }} --ca-pass {{ certificate_password }} --dns {{ ansible_fqdn }} --ip 127.0.0.1,{{ ansible_all_ipv4_addresses|join(',') }}
+    args:
+      creates: /etc/elasticsearch/certs/elastic-certificates.p12
+    become: true
+
+  - name: Set rights for /etc/elasticsearch/certs/elastic-certificates.p12
+    ansible.builtin.file:
+      path: /etc/elasticsearch/certs/elastic-certificates.p12
+      owner: root
+      group: elasticsearch
+      mode: 0660
+    become: true
+
+  - name: Set certificate password
+    shell: |
+      echo "{{ certificate_password }}" | /usr/share/elasticsearch/bin/elasticsearch-keystore add -f --stdin xpack.security.transport.ssl.keystore.secure_password
+      echo "{{ certificate_password }}" | /usr/share/elasticsearch/bin/elasticsearch-keystore add -f --stdin xpack.security.http.ssl.keystore.secure_password
+      echo "{{ certificate_password }}" | /usr/share/elasticsearch/bin/elasticsearch-keystore add -f --stdin xpack.security.transport.ssl.truststore.secure_password
+    no_log: false
+    diff: no
+    become: true
+
 - name: Start or restart elasticsearch service
   command: systemctl restart elasticsearch.service
   ignore_errors: true
@@ -172,3 +194,6 @@
 - name: Setup elasticsearch service to autostart
   service: name=elasticsearch state=started enabled=true
   become: true
+
+
+

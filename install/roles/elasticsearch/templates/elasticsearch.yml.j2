@@ -28,6 +28,14 @@ cluster.name: {{ es_cluster_name }}
 {% if es_cluster_enabled %}
 node.name: {{ ansible_hostname }}
 {% endif %}
+{% if es_cluster_enabled %}
+cluster.initial_master_nodes: 
+{{ bootstrap_nodes }}
+{% endif %}
+{% if es_cluster_enabled %}
+discovery.seed_hosts:
+{{ bootstrap_nodes }}
+{% endif %}
 {% if not es_cluster_enabled %}
 #node.name: node-1
 {% endif %}
@@ -97,7 +105,7 @@ network.host: 0.0.0.0
 gateway.recover_after_data_nodes: {{ es_min_quorum }}
 {% endif %}
 {% if not es_cluster_enabled %}
-#gateway.recover_after_data_nodes: 3
+#gateway.recover_after_data_nodes: 2
 {% endif %}
 #
 # For more information, consult the gateway module documentation.
@@ -109,8 +117,33 @@ gateway.recover_after_data_nodes: {{ es_min_quorum }}
 #action.destructive_requires_name: true
 
 {% if install_kibana_xpack %}
-xpack.security.transport.ssl.enabled: true
-xpack.security.http.ssl.enabled: true
-xpack.security.transport.ssl.keystore.path: /etc/elasticsearch/certs/elastic-certificates.p12
-xpack.security.http.ssl.keystore.path: /etc/elasticsearch/certs/elastic-certificates.p12
+{% if enable_ssl|default(false) %}
+xpack.security.enabled: true
+{% else %}
+xpack.security.enabled: false
+{% endif %}
+xpack.security.transport.ssl:
+{% if enable_ssl|default(false) %}
+  enabled: true
+  verification_mode: certificate
+  keystore.path: /etc/elasticsearch/certs/elastic-certificates.p12
+  truststore.path: /etc/elasticsearch/certs/elastic-certificates.p12
+{% else %}
+  enabled: false
+{% endif %}
+xpack.security.http.ssl:
+{% if enable_ssl|default(false) %}
+  enabled: true
+  keystore.path: /etc/elasticsearch/certs/elastic-certificates.p12
+{% else %}
+  enabled: false
+{% endif %}
+
+xpack.security.enrollment.enabled: true
+{% endif %}
+
+{% if custom_host_ip %}
+network.host: [127.0.0.1,{{ custom_host_ip }}]
+{% else %}
+network.host: 0.0.0.0
 {% endif %}
